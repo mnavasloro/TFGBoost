@@ -19,16 +19,19 @@ class ReportRepository:
     def _connect(self):
         return sqlite3.connect(self.path)
 
-    def save(self, report: dict, student_name: str) -> None:
+    def save(self, report: dict, student_name: str, student_id: str) -> None:
         with self._connect() as connection:
-            connection.execute("INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?)", (report["document_id"], student_name, report["filename"], datetime.now(UTC).isoformat(), report["maturity_score"], json.dumps(report, ensure_ascii=False)))
+            connection.execute("INSERT INTO reports (id, student_name, filename, created_at, maturity_score, payload, student_id) VALUES (?, ?, ?, ?, ?, ?, ?)", (report["document_id"], student_name, report["filename"], datetime.now(UTC).isoformat(), report["maturity_score"], json.dumps(report, ensure_ascii=False), student_id))
 
     def get(self, report_id: str) -> dict | None:
         with self._connect() as connection:
             row = connection.execute("SELECT payload FROM reports WHERE id = ?", (report_id,)).fetchone()
         return json.loads(row[0]) if row else None
 
-    def summaries(self) -> list[dict]:
+    def summaries(self, student_id: str | None = None) -> list[dict]:
         with self._connect() as connection:
-            rows = connection.execute("SELECT id, student_name, filename, created_at, maturity_score FROM reports ORDER BY created_at DESC").fetchall()
-        return [{"id": row[0], "student_name": row[1], "filename": row[2], "created_at": row[3], "maturity_score": row[4]} for row in rows]
+            if student_id:
+                rows = connection.execute("SELECT id, student_name, filename, created_at, maturity_score, student_id FROM reports WHERE student_id = ? ORDER BY created_at DESC", (student_id,)).fetchall()
+            else:
+                rows = connection.execute("SELECT id, student_name, filename, created_at, maturity_score, student_id FROM reports ORDER BY created_at DESC").fetchall()
+        return [{"id": row[0], "student_name": row[1], "filename": row[2], "created_at": row[3], "maturity_score": row[4], "student_id": row[5]} for row in rows]

@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TFGBoost</title><link rel="stylesheet" href="/static/styles.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TFGBoost</title><link rel="stylesheet" href="/static/styles.css"><link rel="stylesheet" href="/static/auth.css"></head>
 <body>
-  <header><a class="brand" href="/">TFG<span>Boost</span></a><nav><a href="/">Alumno</a><a href="/tutor">Tutor</a></nav></header>
+  <header><a class="brand" href="/">TFG<span>Boost</span></a><nav><span class="user-name">{{ user.display_name }}</span><form action="/logout" method="post"><button class="link-button">Salir</button></form></nav></header>
   <main>
     <section class="hero"><p class="eyebrow">Apoyo formativo para TFG</p><h1>Mejora tu borrador,<br>sin que nadie lo escriba por ti.</h1><p>Recibe una revisión inicial de estructura, claridad, coherencia, redacción y referencias antes de enviarlo a tu tutor.</p></section>
-    <section class="card upload-card"><h2>Analizar borrador</h2><p class="muted">Tus datos se almacenan localmente. PDF o DOCX, máximo 15 MB.</p><form id="upload-form"><label>Tu nombre<input name="student_name" required maxlength="120" placeholder="Nombre y apellidos"></label><label>Documento<input name="document" required type="file" accept=".pdf,.docx"></label><button type="submit">Generar diagnóstico</button></form><p id="status" role="status"></p></section>
+    <section class="card upload-card"><h2>Analizar borrador</h2><p class="muted">Tus datos se almacenan localmente. PDF o DOCX, máximo 15 MB.</p><form id="upload-form"><label>Documento<input name="document" required type="file" accept=".pdf,.docx"></label><button type="submit">Generar diagnóstico</button></form><p id="status" role="status"></p></section>
     <section id="report" hidden aria-live="polite"></section>
   </main>
   <footer>TFGBoost es una ayuda de autoestudio. Las decisiones académicas corresponden siempre al tutor.</footer>
