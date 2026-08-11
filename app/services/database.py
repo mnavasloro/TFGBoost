@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from app.auth.contracts import User
 
@@ -36,12 +37,19 @@ class Database:
                     id TEXT PRIMARY KEY, student_name TEXT NOT NULL, filename TEXT NOT NULL,
                     created_at TEXT NOT NULL, maturity_score INTEGER NOT NULL, payload TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS tutor_reviews (
+                    id TEXT PRIMARY KEY, report_id TEXT NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+                    tutor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    comments TEXT NOT NULL, annotated_filename TEXT,
+                    stored_filename TEXT, created_at TEXT NOT NULL
+                );
             """)
             existing_columns = {row["name"] for row in connection.execute("PRAGMA table_info(reports)")}
             if "student_id" not in existing_columns:
                 connection.execute("ALTER TABLE reports ADD COLUMN student_id TEXT REFERENCES users(id)")
             connection.execute("CREATE INDEX IF NOT EXISTS reports_student_id_idx ON reports(student_id)")
             connection.execute("CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at)")
+            connection.execute("CREATE INDEX IF NOT EXISTS tutor_reviews_report_idx ON tutor_reviews(report_id, created_at DESC)")
 
     def find_user_by_email(self, email: str):
         with self._connect() as connection:
@@ -68,3 +76,14 @@ class Database:
     def delete_session(self, token_hash: str) -> None:
         with self._connect() as connection:
             connection.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+
+    def create_tutor_review(self, report_id: str, tutor_id: str, comments: str, annotated_filename: str | None, stored_filename: str | None) -> dict:
+        review = {"id": str(uuid4()), "report_id": report_id, "tutor_id": tutor_id, "comments": comments.strip(), "annotated_filename": annotated_filename, "stored_filename": stored_filename, "created_at": datetime.now(UTC).isoformat()}
+        with self._connect() as connection:
+            connection.execute("INSERT INTO tutor_reviews VALUES (:id, :report_id, :tutor_id, :comments, :annotated_filename, :stored_filename, :created_at)", review)
+        return review
+
+    def latest_tutor_review(self, report_id: str) -> dict | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM tutor_reviews WHERE report_id = ? ORDER BY created_at DESC LIMIT 1", (report_id,)).fetchone()
+        return dict(row) if row else None

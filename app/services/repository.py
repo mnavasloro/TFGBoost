@@ -19,9 +19,9 @@ class ReportRepository:
     def _connect(self):
         return sqlite3.connect(self.path)
 
-    def save(self, report: dict, student_name: str, student_id: str) -> None:
+    def save(self, report: dict, student_name: str, student_id: str, created_at: str | None = None) -> None:
         with self._connect() as connection:
-            connection.execute("INSERT INTO reports (id, student_name, filename, created_at, maturity_score, payload, student_id) VALUES (?, ?, ?, ?, ?, ?, ?)", (report["document_id"], student_name, report["filename"], datetime.now(UTC).isoformat(), report["maturity_score"], json.dumps(report, ensure_ascii=False), student_id))
+            connection.execute("INSERT INTO reports (id, student_name, filename, created_at, maturity_score, payload, student_id) VALUES (?, ?, ?, ?, ?, ?, ?)", (report["document_id"], student_name, report["filename"], created_at or datetime.now(UTC).isoformat(), report["maturity_score"], json.dumps(report, ensure_ascii=False), student_id))
 
     def get(self, report_id: str) -> dict | None:
         with self._connect() as connection:

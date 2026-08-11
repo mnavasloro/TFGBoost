@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -14,7 +15,7 @@ from app.auth.service import AuthService
 from app.config import settings
 from app.services.analyzer import analyse
 from app.services.database import Database
-from app.services.extractor import UnsupportedDocument, extract_text
+from app.services.extractor import TextExtractionError, UnsupportedDocument, extract_text
 from app.services.repository import ReportRepository
 
 app = FastAPI(title="TFGBoost", description="Feedback formativo para borradores de TFG", version="0.2.0")
@@ -42,6 +43,15 @@ def require_tutor(user: User = Depends(require_user)) -> User:
     return user
 
 
+def accessible_report(report_id: str, user: User) -> dict:
+    report = repository.get(report_id)
+    if not report:
+        raise HTTPException(404, "Informe no encontrado.")
+    if user.role != "tutor" and report_id not in {item["id"] for item in repository.summaries(user.id)}:
+        raise HTTPException(403, "No tienes permiso para acceder a este informe.")
+    return report
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "storage": "local", "authentication": "local"}
@@ -53,7 +63,10 @@ def home(request: Request, user: User | None = Depends(current_user)):
         return RedirectResponse("/login", status_code=303)
     if user.role == "tutor":
         return RedirectResponse("/tutor", status_code=303)
-    return templates.TemplateResponse(request, "index.html", {"user": user})
+    reports = repository.summaries(user.id)
+    for report in reports:
+        report["tutor_review"] = database.latest_tutor_review(report["id"])
+    return templates.TemplateResponse(request, "index.html", {"user": user, "reports": reports})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -102,7 +115,10 @@ def logout(request: Request):
 
 @app.get("/tutor", response_class=HTMLResponse)
 def tutor_dashboard(request: Request, user: User = Depends(require_tutor)):
-    return templates.TemplateResponse(request, "tutor.html", {"reports": repository.summaries(), "user": user})
+    reports = repository.summaries()
+    for report in reports:
+        report["tutor_review"] = database.latest_tutor_review(report["id"])
+    return templates.TemplateResponse(request, "tutor.html", {"reports": reports, "user": user})
 
 
 @app.post("/api/documents", status_code=201)
@@ -121,8 +137,10 @@ async def upload_document(document: UploadFile = File(...), user: User = Depends
         text = extract_text(filename, content)
     except UnsupportedDocument as error:
         raise HTTPException(415, str(error)) from error
+    except TextExtractionError as error:
+        raise HTTPException(422, str(error)) from error
     except Exception as error:
-        raise HTTPException(422, "No se pudo extraer texto del documento. Comprueba que no sea un PDF escaneado o protegido.") from error
+        raise HTTPException(422, "No se pudo analizar el archivo por un error inesperado.") from error
     if len(text.strip()) < 80:
         raise HTTPException(422, "No se ha podido extraer suficiente texto. Para PDFs escaneados, aplica OCR antes de subirlos.")
     document_id = str(uuid4())
@@ -130,7 +148,26 @@ async def upload_document(document: UploadFile = File(...), user: User = Depends
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / f"{document_id}{Path(safe_name).suffix.lower()}").write_bytes(content)
     report = analyse(text, safe_name, document_id).to_dict()
-    repository.save(report, user.display_name, user.id)
+    previous_versions = repository.summaries(user.id)
+    if previous_versions:
+        previous = previous_versions[0]
+        previous_review = database.latest_tutor_review(previous["id"])
+        if previous_review:
+            previous_path = settings.upload_dir / f"{previous['id']}{Path(previous['filename']).suffix.lower()}"
+            if previous_path.is_file():
+                try:
+                    from app.services.revision_checker import assess_revision
+                    previous_text = extract_text(previous["filename"], previous_path.read_bytes())
+                    revision_check = assess_revision(previous_text, text, previous_review["comments"])
+                    report["revision_check"] = revision_check
+                    severity = "attention" if revision_check["status"] == "attention" else "info"
+                    report["findings"].append({"category": "coherencia", "severity": severity, "title": "Comprobación de feedback del tutor", "explanation": revision_check["message"], "suggestion": "Comprueba cada recomendación del tutor y documenta los cambios realizados antes de enviar la siguiente versión."})
+                except Exception:
+                    # A review remains visible even if an old source file cannot be compared.
+                    pass
+    created_at = datetime.now(UTC).isoformat()
+    repository.save(report, user.display_name, user.id, created_at)
+    report["created_at"] = created_at
     return report
 
 
@@ -141,9 +178,55 @@ def list_reports(user: User = Depends(require_user)):
 
 @app.get("/api/reports/{report_id}")
 def get_report(report_id: str, user: User = Depends(require_user)):
-    report = repository.get(report_id)
-    if not report:
-        raise HTTPException(404, "Informe no encontrado.")
-    if user.role != "tutor" and report_id not in {item["id"] for item in repository.summaries(user.id)}:
-        raise HTTPException(403, "No tienes permiso para acceder a este informe.")
+    report = accessible_report(report_id, user)
+    report["tutor_review"] = database.latest_tutor_review(report_id)
     return report
+
+
+@app.get("/api/reports/{report_id}/document")
+def get_uploaded_document(report_id: str, user: User = Depends(require_user)):
+    """Serve the original version only to its author or a tutor."""
+    report = accessible_report(report_id, user)
+    suffix = Path(report["filename"]).suffix.lower()
+    stored_file = settings.upload_dir / f"{report_id}{suffix}"
+    if not stored_file.is_file():
+        raise HTTPException(404, "El archivo original ya no está disponible.")
+    media_type = "application/pdf" if suffix == ".pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    disposition = "inline" if suffix == ".pdf" else "attachment"
+    return FileResponse(stored_file, media_type=media_type, filename=report["filename"], content_disposition_type=disposition)
+
+
+@app.post("/api/reports/{report_id}/reviews")
+async def submit_tutor_review(report_id: str, comments: str = Form(..., min_length=5), annotated_document: UploadFile | None = File(None), user: User = Depends(require_tutor)):
+    accessible_report(report_id, user)
+    annotated_filename = stored_filename = None
+    if annotated_document and annotated_document.filename:
+        annotated_filename = Path(annotated_document.filename).name
+        suffix = Path(annotated_filename).suffix.lower()
+        if suffix not in ALLOWED_EXTENSIONS:
+            raise HTTPException(415, "El documento comentado debe ser PDF o DOCX.")
+        content = await annotated_document.read()
+        if not content:
+            raise HTTPException(400, "El documento comentado está vacío.")
+        if len(content) > settings.max_upload_mb * 1024 * 1024:
+            raise HTTPException(413, f"El archivo supera el límite de {settings.max_upload_mb} MB.")
+        stored_filename = f"{uuid4()}{suffix}"
+        review_dir = settings.upload_dir / "tutor-reviews"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        (review_dir / stored_filename).write_bytes(content)
+    database.create_tutor_review(report_id, user.id, comments, annotated_filename, stored_filename)
+    return RedirectResponse("/tutor", status_code=303)
+
+
+@app.get("/api/reports/{report_id}/reviews/latest/document")
+def get_annotated_document(report_id: str, user: User = Depends(require_user)):
+    accessible_report(report_id, user)
+    review = database.latest_tutor_review(report_id)
+    if not review or not review["stored_filename"]:
+        raise HTTPException(404, "No hay un archivo comentado para esta versión.")
+    path = settings.upload_dir / "tutor-reviews" / review["stored_filename"]
+    if not path.is_file():
+        raise HTTPException(404, "El archivo comentado ya no está disponible.")
+    suffix = Path(review["annotated_filename"]).suffix.lower()
+    media_type = "application/pdf" if suffix == ".pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return FileResponse(path, media_type=media_type, filename=review["annotated_filename"], content_disposition_type="inline" if suffix == ".pdf" else "attachment")
