@@ -12,7 +12,9 @@ Prototipo local de apoyo formativo para la revisión de borradores de Trabajo de
 - Registro e inicio de sesión local con perfiles de estudiante y tutor; los informes de estudiantes sólo son visibles para su autor y para tutores.
 - API documentada automáticamente en `/docs`.
 
-El diagnóstico inicial se basa en reglas transparentes para que sea útil sin depender de un proveedor externo. La configuración deja preparado el uso de Ollama local para una futura capa de análisis lingüístico, sin enviar borradores a terceros.
+El diagnóstico inicial se basa en reglas transparentes y, después, Qwen3 8B mediante Ollama local revisa el borrador en seis fases: planteamiento y estructura; método y resultados; fuentes; figuras y anexos; redacción; y requisitos formales y éticos. Cada petición recibe exclusivamente la sección pertinente, dividida en fragmentos de hasta 9.000 caracteres para ajustarse a la ventana de 4.096 tokens y ejecutarse de forma fiable en CPU. El borrador no sale del equipo.
+
+En equipos donde Qwen3 se ejecute en CPU, una comprobación de un documento completo puede tardar varios minutos. El timeout está configurado en 600 segundos y la terminal muestra el punto en curso y su tiempo transcurrido.
 
 ## Arranque local
 
@@ -23,6 +25,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
+ollama pull qwen3:8b
 uvicorn app.main:app --reload --reload-dir app
 ```
 

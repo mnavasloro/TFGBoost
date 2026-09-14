@@ -1,4 +1,4 @@
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 Category = Literal["estructura", "claridad", "coherencia", "redaccion", "referencias"]
@@ -28,6 +28,7 @@ class AnalysisReport:
     sections_found: list[str]
     sections_missing: list[str]
     findings: list[Finding]
+    checklist: list[dict[str, str]] = field(default_factory=list)
     disclaimer: str = "Este informe es una ayuda formativa. No sustituye la revisión ni el criterio del tutor."
 
     def to_dict(self) -> dict:

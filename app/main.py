@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import logging
 from pathlib import Path
+from time import perf_counter
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -16,6 +18,7 @@ from app.config import settings
 from app.services.analyzer import analyse
 from app.services.database import Database
 from app.services.extractor import TextExtractionError, UnsupportedDocument, extract_text
+from app.services.ollama_checklist import run_checklist
 from app.services.repository import ReportRepository
 
 app = FastAPI(title="TFGBoost", description="Feedback formativo para borradores de TFG", version="0.2.0")
@@ -25,6 +28,7 @@ database = Database(settings.database_path)
 repository = ReportRepository(settings.database_path)
 auth = AuthService(LocalIdentityProvider(database), database, settings.session_days)
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+logger = logging.getLogger("uvicorn.error")
 
 
 def current_user(request: Request) -> User | None:
@@ -123,6 +127,7 @@ def tutor_dashboard(request: Request, user: User = Depends(require_tutor)):
 
 @app.post("/api/documents", status_code=201)
 async def upload_document(document: UploadFile = File(...), user: User = Depends(require_user)):
+    pipeline_started_at = perf_counter()
     if user.role != "student":
         raise HTTPException(403, "El área de subida está reservada a estudiantes.")
     filename = document.filename or "documento"
@@ -143,11 +148,15 @@ async def upload_document(document: UploadFile = File(...), user: User = Depends
         raise HTTPException(422, "No se pudo analizar el archivo por un error inesperado.") from error
     if len(text.strip()) < 80:
         raise HTTPException(422, "No se ha podido extraer suficiente texto. Para PDFs escaneados, aplica OCR antes de subirlos.")
+    logger.info("[Pipeline] Extracción terminada en %.1f s (%d caracteres).", perf_counter() - pipeline_started_at, len(text))
     document_id = str(uuid4())
     safe_name = Path(filename).name
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / f"{document_id}{Path(safe_name).suffix.lower()}").write_bytes(content)
     report = analyse(text, safe_name, document_id).to_dict()
+    logger.info("[Pipeline] Análisis local terminado en %.1f s; comienza la checklist Ollama.", perf_counter() - pipeline_started_at)
+    report["checklist"] = run_checklist(text)
+    logger.info("[Pipeline] Checklist Ollama terminada en %.1f s.", perf_counter() - pipeline_started_at)
     previous_versions = repository.summaries(user.id)
     if previous_versions:
         previous = previous_versions[0]
@@ -167,6 +176,7 @@ async def upload_document(document: UploadFile = File(...), user: User = Depends
                     pass
     created_at = datetime.now(UTC).isoformat()
     repository.save(report, user.display_name, user.id, created_at)
+    logger.info("[Pipeline] Informe guardado en %.1f s.", perf_counter() - pipeline_started_at)
     report["created_at"] = created_at
     return report
 
