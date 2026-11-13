@@ -1,3 +1,57 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TFGBoost · Tutor</title><link rel="stylesheet" href="/static/styles.css"><link rel="stylesheet" href="/static/auth.css"><link rel="stylesheet" href="/static/history.css"><link rel="stylesheet" href="/static/reviews.css"></head>
-<body><header><a class="brand" href="/">TFG<span>Boost</span></a><nav><span class="user-name">{{ user.display_name }}</span><form action="/logout" method="post"><button class="link-button">Salir</button></form></nav></header><main><section class="hero compact"><p class="eyebrow">Panel del tutor</p><h1>Histórico de entregas</h1><p>Consulta cada versión, aporta comentarios formativos y adjunta una copia anotada cuando sea útil.</p></section><section class="card history-card"><table><thead><tr><th>Estudiante</th><th>Documento</th><th>Subida</th><th>Madurez</th><th>Acciones</th></tr></thead><tbody>{% for report in reports %}<tr><td>{{ report.student_name }}</td><td>{{ report.filename }}</td><td><time datetime="{{ report.created_at }}">{{ report.created_at[:16].replace('T', ' ') }}</time></td><td><strong>{{ report.maturity_score }}/100</strong></td><td class="actions"><button class="small" data-report-id="{{ report.id }}">Ver feedback IA</button><a class="file-link" href="/api/reports/{{ report.id }}/document" target="_blank">Abrir archivo</a></td></tr><tr class="review-row"><td colspan="5"><details class="review-form"{% if report.tutor_review %} open{% endif %}><summary>{% if report.tutor_review %}Último feedback enviado · {{ report.tutor_review.created_at[:16].replace('T', ' ') }}{% else %}Añadir feedback y documento comentado{% endif %}</summary>{% if report.tutor_review %}<p class="previous-review">{{ report.tutor_review.comments }}</p>{% if report.tutor_review.stored_filename %}<a class="file-link" href="/api/reports/{{ report.id }}/reviews/latest/document" target="_blank">Abrir archivo anotado anterior</a>{% endif %}{% endif %}<form action="/api/reports/{{ report.id }}/reviews" method="post" enctype="multipart/form-data"><label>Comentarios y sugerencias para la siguiente versión<textarea name="comments" rows="4" minlength="5" required placeholder="Escribe una sugerencia por línea para facilitar la comprobación de la siguiente entrega."></textarea></label><label>Documento comentado (opcional)<input name="annotated_document" type="file" accept=".pdf,.docx"></label><button type="submit">Enviar feedback al alumno</button></form></details></td></tr>{% else %}<tr><td colspan="5" class="muted">Aún no hay informes. El alumnado puede crear el primero desde la página principal.</td></tr>{% endfor %}</tbody></table></section><section id="report" hidden></section></main><footer>Los indicadores orientan la tutoría; no son una calificación automática.</footer><script src="/static/app.js"></script></body></html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TFGBoost · Tutor</title>
+<link rel="stylesheet" href="/static/styles.css"><link rel="stylesheet" href="/static/auth.css"><link rel="stylesheet" href="/static/history.css"><link rel="stylesheet" href="/static/reviews.css"><link rel="stylesheet" href="/static/report.css"></head>
+<body data-role="tutor">
+<header><a class="brand" href="/">TFG<span>Boost</span></a><nav><span class="user-name">{{ user.display_name }}</span><form action="/logout" method="post"><button class="link-button">Salir</button></form></nav></header>
+<main>
+  <section class="hero compact"><p class="eyebrow">Panel del tutor</p><h1>Seguimiento de borradores</h1>
+    <p>Solo llegan aquí los borradores que el estudiante envía tras superar la madurez mínima ({{ threshold }}/100) y resolver o justificar los puntos imprescindibles. Los indicadores orientan la tutoría; no son una calificación.</p>
+    <p class="muted">{% if show_all %}Mostrando todos los estudiantes. <a href="/tutor">Ver solo borradores enviados</a>.{% else %}{% if hidden_count %}{{ hidden_count }} estudiante{{ '' if hidden_count == 1 else 's' }} con borradores aún no enviados. {% endif %}<a href="/tutor?all=true">Ver también borradores no enviados</a>.{% endif %}</p>
+  </section>
+
+  {% for student in students %}{% set latest = student.latest_submitted or student.latest %}
+  <section class="card student-card">
+    <div class="student-head">
+      <div>
+        <p class="eyebrow">{% if student.pending_review %}<span class="badge warning">Pendiente de revisión</span>{% endif %} {{ student.versions|length }} versión{{ '' if student.versions|length == 1 else 'es' }}</p>
+        <h2>{{ student.name }}</h2>
+        <p class="muted">Última: {{ latest.filename }} · {{ latest.created_at[:16].replace('T', ' ') }}{% if latest.submitted_at %} · enviada {{ latest.submitted_at[:16].replace('T', ' ') }}{% else %} · <em>no enviada</em>{% endif %}</p>
+      </div>
+      <div class="maturity">{% if latest.status == 'done' %}<span class="light big {{ latest.traffic_light or '' }}"></span><strong>{{ latest.maturity_score }}</strong><small>/100</small>{% else %}<span class="muted">{{ 'Analizando…' if latest.status == 'processing' else 'Error' }}</span>{% endif %}</div>
+    </div>
+
+    <div class="trend">{% for v in student.versions %}{% if v.status == 'done' %}<span class="trend-step {{ v.traffic_light or '' }}" title="{{ v.created_at[:16].replace('T', ' ') }}">V{{ loop.index }} · {{ v.maturity_score }}{% if v.submitted_at %} ✉{% endif %}</span>{% if not loop.last %}<span class="arrow">→</span>{% endif %}{% endif %}{% endfor %}</div>
+
+    {% if latest.categories %}<div class="category-chips">{% for key, cat in latest.categories.items() %}{% if cat.evaluated %}<span class="chip" style="--cat:{{ checklist.categories[key].color if key in checklist.categories else '#dfe4ed' }}" title="Puntuación de la categoría: {{ cat.score }}/100">{{ cat.label }} · <strong>{{ cat.open }}</strong> aviso{{ '' if cat.open == 1 else 's' }}</span>{% endif %}{% endfor %}</div>{% endif %}
+
+    <div class="signals">
+      {% if latest.evolution %}<p>Respecto a la versión anterior: <strong>{{ '%+d'|format(latest.evolution.score_delta) }}</strong> puntos · {{ latest.evolution.resolved|length }} avisos resueltos · {{ latest.evolution.persisting|length }} persisten{% if latest.evolution.claimed_fixed_but_persisting %} · <span class="warn-text">{{ latest.evolution.claimed_fixed_but_persisting|length }} marcados como corregidos pero siguen detectándose ({{ latest.evolution.claimed_fixed_but_persisting|join(', ') }})</span>{% endif %}.</p>{% endif %}
+      {% if latest.ai_text_status in ('por_revisar', 'no_cumple') %}<p class="warn-text">Indicio de pasajes genéricos o sin voz propia (posible texto generado). Es una señal a verificar en tutoría, no una prueba.</p>{% endif %}
+      {% if latest.blocking_items %}<p>Puntos imprescindibles abiertos: {% for id in latest.blocking_items %}<span class="badge no_cumple">{{ id }}</span> {% endfor %}{% if latest.submitted_at %}<span class="muted">(el estudiante los justificó como «no aplica» para poder enviar; revisa sus motivos en el informe)</span>{% endif %}</p>{% endif %}
+    </div>
+
+    <div class="table-scroll"><table><thead><tr><th>Versión</th><th>Documento</th><th>Modelo</th><th>Madurez</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+    {% for report in student.versions|reverse %}
+      <tr data-row-id="{{ report.id }}" data-status="{{ report.status }}">
+        <td>V{{ student.versions|length - loop.index + 1 }}</td>
+        <td>{{ report.filename }}<br><small class="muted">{{ report.created_at[:16].replace('T', ' ') }}</small></td>
+        <td><small>{{ (report.model or 'none').replace('anthropic:', '').replace('ollama:', '') }}</small></td>
+        <td class="score-cell">{% if report.status == 'done' %}<span class="light {{ report.traffic_light or '' }}"></span><strong>{{ report.maturity_score }}/100</strong>{% elif report.status == 'processing' %}<span class="muted progress-text">Analizando…</span>{% else %}<span class="badge no_cumple" title="{{ report.error }}">Error</span>{% endif %}</td>
+        <td>{% if report.tutor_review %}<span class="badge cumple">Revisado</span>{% elif report.submitted_at %}<span class="badge warning">Enviado</span>{% else %}<span class="muted">No enviado</span>{% endif %}</td>
+        <td class="actions"><button class="small" data-report-id="{{ report.id }}" {% if report.status != 'done' %}disabled{% endif %}>Ver informe</button><a class="file-link" href="/api/reports/{{ report.id }}/document" target="_blank">Archivo</a>{% if report.status == 'done' and report.schema_version >= 2 %}<a class="file-link" href="/api/reports/{{ report.id }}/results.xlsx" title="Resultado en Excel">Excel</a>{% endif %}<a class="file-link" href="/tutor/reports/{{ report.id }}/trace" target="_blank" title="Peticiones y respuestas de los modelos">Traza</a></td>
+      </tr>
+      <tr class="review-row"><td colspan="6"><details class="review-form"{% if report.tutor_review %} open{% endif %}>
+        <summary>{% if report.tutor_review %}Último feedback enviado · {{ report.tutor_review.created_at[:16].replace('T', ' ') }}{% else %}Añadir feedback y documento comentado{% endif %}</summary>
+        {% if report.tutor_review %}<p class="previous-review">{{ report.tutor_review.comments }}</p>{% if report.tutor_review.stored_filename %}<a class="file-link" href="/api/reports/{{ report.id }}/reviews/latest/document" target="_blank">Abrir archivo anotado anterior</a>{% endif %}{% endif %}
+        <form action="/api/reports/{{ report.id }}/reviews" method="post" enctype="multipart/form-data"><label>Comentarios y sugerencias para la siguiente versión<textarea name="comments" rows="4" minlength="5" required placeholder="Escribe una sugerencia por línea: TFGBoost comprobará en la siguiente versión si hay indicios de que se han aplicado."></textarea></label><label>Documento comentado (opcional)<input name="annotated_document" type="file" accept=".pdf,.docx"></label><button type="submit">Enviar feedback al alumno</button></form>
+      </details></td></tr>
+    {% endfor %}
+    </tbody></table></div>
+  </section>
+  {% else %}
+  <section class="card"><p class="muted">{% if show_all %}Aún no hay borradores.{% else %}Ningún estudiante ha enviado todavía un borrador. <a href="/tutor?all=true">Ver borradores no enviados</a>.{% endif %}</p></section>
+  {% endfor %}
+  <section id="report" hidden></section>
+</main>
+<footer>Los indicadores orientan la tutoría; no son una calificación automática.</footer>
+<script src="/static/app.js"></script></body></html>

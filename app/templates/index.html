@@ -1,14 +1,55 @@
 <!doctype html>
 <html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TFGBoost</title><link rel="stylesheet" href="/static/styles.css"><link rel="stylesheet" href="/static/auth.css"><link rel="stylesheet" href="/static/drop-zone.css"><link rel="stylesheet" href="/static/history.css"><link rel="stylesheet" href="/static/reviews.css"></head>
-<body>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TFGBoost</title>
+<link rel="stylesheet" href="/static/styles.css"><link rel="stylesheet" href="/static/auth.css"><link rel="stylesheet" href="/static/drop-zone.css"><link rel="stylesheet" href="/static/history.css"><link rel="stylesheet" href="/static/reviews.css"><link rel="stylesheet" href="/static/report.css"></head>
+<body data-role="student" data-threshold="{{ settings.submit_threshold }}">
   <header><a class="brand" href="/">TFG<span>Boost</span></a><nav><span class="user-name">{{ user.display_name }}</span><form action="/logout" method="post"><button class="link-button">Salir</button></form></nav></header>
   <main>
-    <section class="hero"><p class="eyebrow">Apoyo formativo para TFG</p><h1>Mejora tu borrador,<br>sin que nadie lo escriba por ti.</h1><p>Recibe una revisión inicial de estructura, claridad, coherencia, redacción y referencias antes de enviarlo a tu tutor.</p></section>
-    <section class="card upload-card"><h2>Analizar borrador</h2><p class="muted">Tus datos se almacenan localmente. PDF o DOCX, máximo 15 MB.</p><form id="upload-form"><input id="document-input" name="document" required type="file" accept=".pdf,.docx" hidden><label id="drop-zone" class="drop-zone" for="document-input"><span class="drop-icon">↓</span><strong>Suelta el archivo aquí</strong><span>o pulsa para seleccionar un PDF o DOCX</span><small id="selected-file"></small></label><button type="submit">Generar diagnóstico</button></form><p id="status" role="status"></p></section>
-    <section class="card history-card"><div class="section-heading"><div><p class="eyebrow">Tu historial</p><h2>Versiones subidas</h2></div><span class="muted">{{ reports|length }} entrega{{ '' if reports|length == 1 else 's' }}</span></div><table><thead><tr><th>Versión</th><th>Archivo</th><th>Subida</th><th>Madurez</th><th>Feedback tutor</th><th>Acciones</th></tr></thead><tbody>{% for report in reports %}<tr><td>V{{ reports|length - loop.index + 1 }}</td><td>{{ report.filename }}</td><td><time datetime="{{ report.created_at }}">{{ report.created_at[:16].replace('T', ' ') }}</time></td><td><strong>{{ report.maturity_score }}/100</strong></td><td>{% if report.tutor_review %}<details class="review-summary"><summary>Ver comentario</summary><p>{{ report.tutor_review.comments }}</p>{% if report.tutor_review.stored_filename %}<a class="file-link" href="/api/reports/{{ report.id }}/reviews/latest/document" target="_blank">Archivo anotado</a>{% endif %}</details>{% else %}<span class="muted">Pendiente</span>{% endif %}</td><td class="actions"><button class="small" data-report-id="{{ report.id }}">Ver feedback IA</button><a class="file-link" href="/api/reports/{{ report.id }}/document" target="_blank">Abrir archivo</a></td></tr>{% else %}<tr><td colspan="6" class="muted">Todavía no has subido ninguna versión.</td></tr>{% endfor %}</tbody></table></section>
+    <section class="hero"><p class="eyebrow">Apoyo formativo para TFG</p><h1>Mejora tu borrador,<br>sin que nadie lo escriba por ti.</h1><p>Recibe una revisión de estructura, redacción, coherencia, citas y figuras basada en una checklist elaborada con tutores de la UPM. TFGBoost señala qué revisar y por qué; las correcciones las haces tú.</p></section>
+
+    <section class="card upload-card">
+      <h2>Analizar borrador</h2>
+      <p class="muted">PDF o DOCX, máximo {{ settings.max_upload_mb }} MB. Para enviarlo a tu tutor necesitarás una madurez mínima de {{ settings.submit_threshold }}/100.</p>
+      <form id="upload-form">
+        <input id="document-input" name="document" required type="file" accept=".pdf,.docx" hidden>
+        <label id="drop-zone" class="drop-zone" for="document-input"><span class="drop-icon">↓</span><strong>Suelta el archivo aquí</strong><span>o pulsa para seleccionar un PDF o DOCX</span><small id="selected-file"></small></label>
+        <label>Modelo de revisión
+          <select name="model" id="model-select">
+            {% for model in models %}<option value="{{ model.id }}" data-remote="{{ 'true' if model.remote else 'false' }}" data-provider="{{ model.provider_name or '' }}" {% if not model.available %}disabled{% endif %} {% if model.id == default_model %}selected{% endif %}>{{ model.label }}{% if not model.available %} — no disponible{% endif %}</option>{% endfor %}
+          </select>
+          <span class="help">Los modelos locales no envían tu texto fuera del servidor, pero pueden tardar varios minutos. «Solo reglas» es inmediato pero no evalúa coherencia, contenido ni ortografía.</span>
+        </label>
+        <fieldset id="routing-choice" class="routing" hidden>
+          <legend>Prioridad</legend>
+          <label class="radio"><input type="radio" name="routing" value="cheap" {% if settings.openrouter_routing != 'fast' %}checked{% endif %}> <span><strong>Barato</strong><small>El proveedor más económico del modelo.</small></span></label>
+          <label class="radio"><input type="radio" name="routing" value="fast" {% if settings.openrouter_routing == 'fast' %}checked{% endif %}> <span><strong>Rápido</strong><small>El proveedor más veloz, sin pasar del precio publicado (puede costar hasta el doble).</small></span></label>
+        </fieldset>
+        <div id="remote-consent" class="consent" hidden>
+          <p><strong>Modelo externo.</strong> El texto de tu borrador se enviará a <strong id="remote-provider">un proveedor externo</strong> para su análisis y saldrá de la infraestructura de la universidad. Puede generar coste según los tokens usados. Límite: {{ settings.remote_daily_limit }} análisis al día.</p>
+          <label class="checkbox"><input type="checkbox" name="consent_external" value="true"> Acepto enviar el texto de este borrador al proveedor externo.</label>
+        </div>
+        <button type="submit">Generar diagnóstico</button>
+      </form>
+      <p id="status" role="status"></p>
+    </section>
+
+    <section class="card history-card">
+      <div class="section-heading"><div><p class="eyebrow">Tu historial</p><h2>Versiones subidas</h2></div><span class="muted">{{ reports|length }} entrega{{ '' if reports|length == 1 else 's' }}</span></div>
+      <div class="table-scroll"><table><thead><tr><th>Versión</th><th>Archivo</th><th>Subida</th><th>Madurez</th><th>Tutor</th><th>Acciones</th></tr></thead>
+      <tbody>{% for report in reports %}
+        <tr data-row-id="{{ report.id }}" data-status="{{ report.status }}">
+          <td>V{{ reports|length - loop.index + 1 }}</td>
+          <td>{{ report.filename }}<br><small class="muted">{{ (report.model or 'none').replace('anthropic:', '').replace('ollama:', '') }}</small></td>
+          <td><time datetime="{{ report.created_at }}">{{ report.created_at[:16].replace('T', ' ') }}</time></td>
+          <td class="score-cell">{% if report.status == 'processing' %}<span class="muted progress-text">Analizando…</span>{% elif report.status == 'error' %}<span class="badge no_cumple" title="{{ report.error }}">Error</span>{% else %}<span class="light {{ report.traffic_light or '' }}"></span><strong>{{ report.maturity_score }}/100</strong>{% endif %}</td>
+          <td>{% if report.tutor_review %}<details class="review-summary"><summary>Ver comentario</summary><p>{{ report.tutor_review.comments }}</p>{% if report.tutor_review.stored_filename %}<a class="file-link" href="/api/reports/{{ report.id }}/reviews/latest/document" target="_blank">Archivo anotado</a>{% endif %}</details>{% elif report.submitted_at %}<span class="badge info">Enviado</span>{% else %}<span class="muted">No enviado</span>{% endif %}</td>
+          <td class="actions"><button class="small" data-report-id="{{ report.id }}" {% if report.status != 'done' %}disabled{% endif %}>Ver informe</button><a class="file-link" href="/api/reports/{{ report.id }}/document" target="_blank">Archivo</a><button class="link-button danger" data-delete-id="{{ report.id }}">Borrar</button></td>
+        </tr>{% else %}
+        <tr class="empty-row"><td colspan="6" class="muted">Todavía no has subido ninguna versión.</td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
     <section id="report" hidden aria-live="polite"></section>
   </main>
-  <footer>TFGBoost es una ayuda de autoestudio. Las decisiones académicas corresponden siempre al tutor.</footer>
+  <footer>TFGBoost es una ayuda de autoestudio: puede equivocarse. Las decisiones académicas corresponden siempre al tutor.</footer>
   <script src="/static/app.js"></script>
 </body></html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Traza · {{ report.filename }} · TFGBoost</title>
+<link rel="stylesheet" href="/static/styles.css"><link rel="stylesheet" href="/static/auth.css"><link rel="stylesheet" href="/static/report.css"></head>
+<body data-role="tutor">
+{% set STATUS = {'cumple': 'Cumple', 'por_revisar': 'Por revisar', 'no_cumple': 'No cumple', 'no_evaluable': 'No evaluable', 'manual': 'Revisión manual'} %}
+<header><a class="brand" href="/">TFG<span>Boost</span></a><nav><span class="user-name">{{ user.display_name }}</span><form action="/logout" method="post"><button class="link-button">Salir</button></form></nav></header>
+<main class="trace-page">
+  <section class="hero compact"><p class="eyebrow">Traza del análisis</p><h1>{{ report.filename }}</h1>
+    <p class="muted">{{ report.student_name }} · {{ report.created_at[:16].replace('T', ' ') }} · modelo <code>{{ report.model or 'none' }}</code> · estado {{ report.status }}</p>
+    <p><a href="/tutor">← Volver al panel</a> · <a href="/api/reports/{{ report.document_id }}/trace.jsonl">Descargar traza (.jsonl)</a></p>
+  </section>
+
+  {% if not events %}
+  <section class="card"><p class="muted">Este informe no tiene traza: se generó antes de activar el registro. Las nuevas subidas sí la tendrán.</p></section>
+  {% endif %}
+
+  {% for e in events %}
+  <section class="card trace-event ev-{{ e.event }}">
+    <div class="trace-head"><span class="item-id">#{{ e.seq }}</span> <strong>{{ e.event }}</strong> <span class="muted small">{{ e.ts[11:19] }} UTC</span>
+      {% if e.event == 'llm_request' %}<span class="badge info">Petición {{ e.call }}/{{ e.total_calls }} · {{ e.model }}</span>
+      {% elif e.event == 'llm_response' %}<span class="badge cumple">Respuesta {{ e.call }} · {{ e.seconds }} s</span>
+      {% elif e.event in ('llm_error', 'failed') %}<span class="badge no_cumple">Error</span>
+      {% elif e.event == 'llm_skipped' %}<span class="badge warning">Omitida</span>{% endif %}
+    </div>
+
+    {% if e.event == 'upload' %}
+      <p>Fichero <strong>{{ e.filename }}</strong> · modelo elegido <code>{{ e.model }}</code> · {{ e.characters }} caracteres extraídos.</p>
+    {% elif e.event == 'queue' %}
+      <p>Turno obtenido para el modelo tras {{ e.waited_seconds }} s en cola.</p>
+    {% elif e.event == 'sections' %}
+      <p>{{ e.detected|length }} capítulos detectados{% if e.known_headings %} (a partir de {{ e.known_headings|length }} encabezados declarados por el documento){% endif %}:
+      {% for s in e.detected %}<span class="chip">{{ s.key }} · {{ s.heading[:40] }}</span> {% endfor %}</p>
+    {% elif e.event == 'rules' %}
+      <p>Reglas aplicadas en {{ e.seconds }} s · {{ e.metrics.word_count }} palabras.</p>
+      <div class="table-scroll"><table class="trace-table"><thead><tr><th>Punto</th><th>Estado (reglas)</th><th>Evidencia</th><th>Comentarios</th></tr></thead><tbody>
+      {% for id, r in e.results.items() %}<tr><td>{{ id }}</td><td><span class="badge {{ r.status }}">{{ STATUS[r.status] }}</span></td><td>{{ r.evidence }}</td><td>{{ r.comments|length }}</td></tr>{% endfor %}
+      </tbody></table></div>
+    {% elif e.event == 'llm_plan' %}
+      <p>Modelo <strong>{{ e.model_label }}</strong> (<code>{{ e.model }}</code>, {{ 'remoto' if e.remote else 'local' }}) · modo <strong>{{ e.mode }}</strong> · {{ e.tasks|length }} peticiones · hasta {{ e.max_input_chars }} caracteres de borrador por petición.</p>
+      <details><summary>Prompt de sistema (común a todas las peticiones)</summary><pre>{{ e.system_prompt }}</pre></details>
+      <details><summary>Plan de peticiones</summary><ul>{% for t in e.tasks %}<li>{{ t.call }}. {{ t.group }} · {{ t.chunk }} ({{ t.chars }} caracteres)</li>{% endfor %}</ul></details>
+    {% elif e.event == 'llm_request' %}
+      <p>Bloque <strong>{{ e.group_title }}</strong> · fragmento <strong>{{ e.chunk }}</strong> · puntos {{ e['items']|join(', ') }}</p>
+      <details><summary>Preguntas enviadas (mensaje de usuario)</summary><pre>{{ e.instructions }}</pre></details>
+      <details><summary>Borrador enviado ({{ e.document|length }} caracteres)</summary><pre class="long">{{ e.document }}</pre></details>
+      <details><summary>Esquema JSON exigido</summary><pre>{{ e.schema|tojson(indent=2) }}</pre></details>
+    {% elif e.event == 'llm_response' %}
+      <p>{{ e.usage.input_tokens + e.usage.cache_read_tokens + e.usage.cache_write_tokens }} tokens de entrada ({{ e.usage.cache_read_tokens }} desde caché) · {{ e.usage.output_tokens }} de salida{% if e.usage.cost_usd %} · ~{{ '%.4f'|format(e.usage.cost_usd) }} US${% endif %}{% if e.stop_reason %} · fin: {{ e.stop_reason }}{% endif %}{% if e.served_by %} · respondió <code>{{ e.served_by }}</code>{% endif %}{% if e.request_id %} · <code>{{ e.request_id }}</code>{% endif %}</p>
+      {% if e.retries %}<p class="warn-text">Reintentos: {{ e.retries|join(' | ') }}</p>{% endif %}
+      {% if e.reasoning_tokens %}<p class="muted small">{{ e.reasoning_tokens }} de los {{ e.usage.output_tokens }} tokens de salida fueron de razonamiento interno.</p>{% endif %}
+      <details open><summary>Respuesta en bruto del modelo</summary><pre>{{ e.raw }}</pre></details>
+      {% if e.reasoning %}<details><summary>Razonamiento del modelo</summary><pre class="long">{{ e.reasoning }}</pre></details>{% endif %}
+      <details><summary>Parámetros de la petición ({{ e.endpoint }})</summary><pre>{{ e.params|tojson(indent=2) }}</pre></details>
+    {% elif e.event == 'llm_error' %}
+      <p class="error-text">{{ e.error }}</p>
+      {% if e.usage %}<p class="muted small">Llamada facturada aunque falló: {{ e.usage.input_tokens + e.usage.cache_read_tokens }} tokens de entrada, {{ e.usage.output_tokens }} de salida{% if e.reasoning_tokens %} ({{ e.reasoning_tokens }} de razonamiento){% endif %}{% if e.usage.cost_usd %}, ~{{ '%.4f'|format(e.usage.cost_usd) }} US${% endif %}{% if e.served_by %} · {{ e.served_by }}{% endif %}.</p>{% endif %}
+      <details open><summary>Detalle en bruto</summary><pre>{{ e.raw }}</pre></details>
+      {% if e.reasoning %}<details><summary>Razonamiento del modelo</summary><pre class="long">{{ e.reasoning }}</pre></details>{% endif %}
+      {% if e.retries %}<p class="warn-text">Reintentos: {{ e.retries|join(' | ') }}</p>{% endif %}
+      <details><summary>Parámetros de la petición ({{ e.endpoint }})</summary><pre>{{ e.params|tojson(indent=2) }}</pre></details>
+    {% elif e.event == 'llm_skipped' %}
+      <p>Petición {{ e.call }} ({{ e.group }} · {{ e.chunk }}) no enviada: {{ e.reason }}.</p>
+    {% elif e.event == 'output' %}
+      <p>Resultado mostrado al usuario: madurez <strong>{{ e.maturity_score }}/100</strong> ({{ e.traffic_light }}){% if e.blocking_items %} · imprescindibles abiertos: {{ e.blocking_items|join(', ') }}{% endif %}. El estado final de cada punto es el más desfavorable entre las fuentes.</p>
+      <div class="table-scroll"><table class="trace-table"><thead><tr><th>Punto</th><th>Final</th><th>Fuentes</th><th>Comentarios mostrados</th></tr></thead><tbody>
+      {% for it in e['items'] %}<tr>
+        <td><strong>{{ it.id }}</strong><br><small>{{ it.title }}</small></td>
+        <td><span class="badge {{ it.final_status }}">{{ STATUS[it.final_status] }}</span>{% if it.provenance and it.provenance.decided_by %}<br><small class="muted">decidido por: {{ it.provenance.decided_by|join(' + ') }}</small>{% endif %}</td>
+        <td>{% for s in (it.provenance.sources if it.provenance else []) %}<div class="prov"><span class="src {{ s.source }}">{{ 'Reglas' if s.source == 'regla' else 'IA' }}</span>{% if s.model %} <code>{{ s.model }}</code>{% endif %} <span class="badge {{ s.status }}">{{ STATUS[s.status] }}</span><br><small>{{ s.evidence }}</small></div>{% endfor %}</td>
+        <td>{% for c in it.shown_comments %}<div class="prov"><span class="src {{ c.source }}">{{ 'Regla' if c.source == 'regla' else 'IA' }}</span>{% if c.model %} <code>{{ c.model }}</code>{% endif %}{% if c.verified == false %} <span class="warn-text">cita no localizada</span>{% endif %}<br>{% if c.quote %}<em>«{{ c.quote }}»</em><br>{% endif %}{{ c.feedback }}</div>{% else %}<span class="muted">—</span>{% endfor %}</td>
+      </tr>{% endfor %}
+      </tbody></table></div>
+    {% elif e.event == 'done' %}
+      <p>Análisis completado en {{ e.seconds }} s · madurez {{ e.maturity_score }}/100.</p>
+    {% elif e.event == 'failed' %}
+      <p class="error-text">{{ e.error }}</p><details><summary>Traza de Python</summary><pre>{{ e.traceback }}</pre></details>
+    {% else %}
+      <pre>{{ e|tojson(indent=2) }}</pre>
+    {% endif %}
+  </section>
+  {% endfor %}
+</main>
+</body></html>

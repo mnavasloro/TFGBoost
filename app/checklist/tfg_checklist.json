@@ -1,0 +1,327 @@
+{
+  "version": "2026-11",
+  "title": "Checklist TFGBoost de revisión formativa de memorias de TFG",
+  "sources": {
+    "solicitud": "Solicitud del piloto TFGBoost (UPM, Vicerrectorado de Universidad Digital): categorías ortografía, estructura, claridad y coherencia; detectar conceptos sin explicar, distribución de capítulos y referencias mal citadas; no redactar por el alumno.",
+    "encuesta": "Cuestionario a tutores de TFG (16 respuestas, ETSISI y otros centros UPM). P8: frecuencia 1-5 de cada error; P9: errores que más tiempo consumen; P10: otros errores; P11: errores que el alumno debería corregir siempre; P13: preocupaciones; P16: qué no debe hacer nunca la herramienta.",
+    "revision": "Guía de revisión por fases usada en la versión anterior del prototipo (revision-tfg-prompts.md).",
+    "normativa": "Requisitos habituales de la normativa de TFG del centro. Adaptar `required_sections` a la normativa oficial vigente de cada escuela."
+  },
+  "scoring": {
+    "description": "La madurez es la media ponderada del estado de cada punto evaluado (cumple = 1, por revisar = 0,5, no cumple = 0). El peso de cada punto es su prioridad en la encuesta: 0,7 × frecuencia media normalizada + 0,3 × proporción de tutores que lo señalan como el que más tiempo consume. Los puntos sin dato de encuesta usan el peso por defecto.",
+    "default_weight": 0.45,
+    "status_values": {"cumple": 1.0, "por_revisar": 0.5, "no_cumple": 0.0},
+    "traffic_light": {"green": 75, "amber": 50}
+  },
+  "required_sections": {
+    "portada": {"aliases": ["portada"], "required": false, "label": "Portada"},
+    "resumen": {"aliases": ["resumen"], "required": true, "label": "Resumen (español)"},
+    "abstract": {"aliases": ["abstract", "summary"], "required": true, "label": "Abstract (inglés)"},
+    "indice": {"aliases": ["indice", "tabla de contenidos", "contenido", "indice general"], "required": true, "label": "Índice"},
+    "introduccion": {"aliases": ["introduccion"], "required": true, "label": "Introducción"},
+    "objetivos": {"aliases": ["objetivos", "objetivo", "objetivos del proyecto", "objetivos del trabajo"], "required": true, "label": "Objetivos"},
+    "estado_arte": {"aliases": ["estado del arte", "trabajos relacionados", "antecedentes", "marco teorico", "estado de la cuestion"], "required": true, "label": "Estado del arte / antecedentes"},
+    "marco_tecnologico": {"aliases": ["marco tecnologico", "tecnologias", "tecnologias utilizadas", "herramientas", "herramientas utilizadas"], "required": false, "label": "Marco tecnológico"},
+    "requisitos": {"aliases": ["requisitos", "analisis de requisitos", "especificacion de requisitos"], "required": false, "label": "Requisitos"},
+    "metodologia": {"aliases": ["metodologia", "metodo", "planificacion", "metodologia y planificacion"], "required": true, "label": "Metodología / planificación"},
+    "desarrollo": {"aliases": ["desarrollo", "implementacion", "diseno", "analisis", "diseno e implementacion", "arquitectura", "propuesta", "solucion propuesta"], "required": true, "label": "Desarrollo"},
+    "resultados": {"aliases": ["resultados", "evaluacion", "experimentos", "validacion", "pruebas", "experimentacion"], "required": true, "label": "Resultados / evaluación"},
+    "impacto": {"aliases": ["impacto", "impacto social", "analisis de impacto", "impacto social y medioambiental", "objetivos de desarrollo sostenible", "responsabilidad etica y profesional"], "required": false, "label": "Análisis de impacto (ODS, ética)"},
+    "conclusiones": {"aliases": ["conclusiones", "conclusion", "conclusiones y trabajo futuro", "conclusiones y lineas futuras"], "required": true, "label": "Conclusiones"},
+    "trabajo_futuro": {"aliases": ["trabajo futuro", "lineas futuras", "trabajos futuros"], "required": false, "label": "Trabajo futuro"},
+    "glosario": {"aliases": ["glosario", "acronimos", "siglas", "abreviaturas", "lista de acronimos"], "required": false, "label": "Glosario / acrónimos"},
+    "referencias": {"aliases": ["referencias", "bibliografia", "referencias bibliograficas"], "required": true, "label": "Referencias"},
+    "anexos": {"aliases": ["anexos", "anexo", "apendices", "apendice"], "required": false, "label": "Anexos"}
+  },
+  "categories": {
+    "lenguaje": {"label": "Ortografía y redacción", "color": "#7c5cff"},
+    "estructura": {"label": "Estructura y normativa", "color": "#2f80ed"},
+    "coherencia": {"label": "Coherencia y argumentación", "color": "#00a3a3"},
+    "contenido": {"label": "Contenido y claridad", "color": "#d97706"},
+    "referencias": {"label": "Citas y fuentes", "color": "#c2410c"},
+    "figuras": {"label": "Figuras, tablas y anexos", "color": "#4d7c0f"},
+    "autoria": {"label": "Autoría e integridad", "color": "#be185d"},
+    "formal": {"label": "Requisitos formales y éticos", "color": "#475569"}
+  },
+  "groups": [
+    {"id": "lenguaje", "title": "Ortografía, gramática y estilo", "categories": ["lenguaje"], "sections": ["resumen", "introduccion", "objetivos", "estado_arte", "marco_tecnologico", "requisitos", "metodologia", "desarrollo", "resultados", "impacto", "conclusiones", "trabajo_futuro", "documento"]},
+    {"id": "estructura", "title": "Planteamiento, estructura y coherencia", "categories": ["estructura", "coherencia"], "sections": ["resumen", "abstract", "introduccion", "objetivos", "estado_arte", "marco_tecnologico", "resultados", "conclusiones", "trabajo_futuro", "documento"]},
+    {"id": "contenido", "title": "Método, decisiones y resultados", "categories": ["contenido"], "sections": ["introduccion", "objetivos", "requisitos", "metodologia", "desarrollo", "resultados", "conclusiones", "documento"]},
+    {"id": "fuentes", "title": "Citas, fuentes y autoría", "categories": ["referencias", "autoria"], "sections": ["introduccion", "estado_arte", "marco_tecnologico", "metodologia", "desarrollo", "resultados", "referencias", "documento"]},
+    {"id": "formal", "title": "Figuras, tablas y requisitos formales", "categories": ["figuras", "formal"], "sections": ["portada", "resumen", "indice", "desarrollo", "resultados", "impacto", "anexos", "documento"]}
+  ],
+  "items": [
+    {
+      "id": "L1", "category": "lenguaje", "title": "Faltas de ortografía, acentuación y erratas",
+      "method": "llm", "severity": "importante", "must_fix": true,
+      "question": "Localiza faltas de ortografía, tildes y erratas. Cita literalmente cada palabra o fragmento erróneo. No incluyas la palabra corregida completa: indica solo qué regla revisar (tilde diacrítica, b/v, mayúsculas, etc.).",
+      "guidance": "Las erratas restan credibilidad y hacen que el tutor dedique su revisión a lo formal. Pasa el corrector del procesador de textos y relee en voz alta los párrafos señalados.",
+      "survey": {"label": "Faltas de ortografía y erratas", "mean_frequency": 3.0, "pct_frequent": 31, "time_votes": 1, "priority": 0.369},
+      "sources": ["solicitud", "encuesta P8a", "encuesta P11"]
+    },
+    {
+      "id": "L2", "category": "lenguaje", "title": "Errores gramaticales y de concordancia",
+      "method": "llm", "severity": "importante", "must_fix": false,
+      "question": "Busca errores de concordancia (género, número, sujeto-verbo), tiempos verbales incoherentes, preposiciones incorrectas (dequeísmo, queísmo) y oraciones sin verbo principal. Cita el fragmento y nombra el tipo de error.",
+      "guidance": "Identifica el sujeto y el verbo de cada oración señalada y comprueba que concuerdan; mantén el mismo tiempo verbal dentro de cada capítulo.",
+      "survey": {"label": "Errores gramaticales y de concordancia", "mean_frequency": 3.56, "pct_frequent": 56, "time_votes": 2, "priority": 0.485},
+      "sources": ["solicitud", "encuesta P8a"]
+    },
+    {
+      "id": "L3", "category": "lenguaje", "title": "Puntuación y espaciado",
+      "method": "rule+llm", "severity": "menor", "must_fix": false,
+      "question": "Señala errores de puntuación: coma entre sujeto y verbo, falta de coma en incisos y conectores, punto y coma mal usado, signos de apertura ausentes (¿ ¡). Cita el fragmento.",
+      "guidance": "Revisa especialmente las comas tras conectores (sin embargo, por tanto) y los incisos. Elimina espacios antes de los signos de puntuación y espacios dobles.",
+      "survey": {"label": "Errores de puntuación", "mean_frequency": 3.5, "pct_frequent": 56, "time_votes": 4, "priority": 0.512},
+      "sources": ["solicitud", "encuesta P8a"]
+    },
+    {
+      "id": "L4", "category": "lenguaje", "title": "Frases largas, confusas o mal construidas",
+      "method": "rule+llm", "severity": "importante", "must_fix": true,
+      "question": "Señala oraciones confusas, demasiado largas (más de 40 palabras) o mal construidas: cita el comienzo y explica qué dificulta su comprensión (varias ideas encadenadas, subordinadas anidadas, referente ambiguo).",
+      "guidance": "Una idea por oración. Separa las ideas independientes y comprueba que sujeto, verbo y complemento se entienden en una sola lectura.",
+      "survey": {"label": "Frases largas, confusas o mal construidas", "mean_frequency": 4.19, "pct_frequent": 81, "time_votes": 7, "priority": 0.69},
+      "sources": ["solicitud", "encuesta P8a", "encuesta P9", "encuesta P11"]
+    },
+    {
+      "id": "L5", "category": "lenguaje", "title": "Registro poco académico (coloquialismos, primera persona inadecuada)",
+      "method": "rule+llm", "severity": "importante", "must_fix": true,
+      "question": "Señala coloquialismos, expresiones informales, valoraciones subjetivas sin respaldo y usos de la primera persona del singular inadecuados para una memoria técnica. Cita el fragmento.",
+      "guidance": "Una memoria técnica usa un registro impersonal o la primera persona del plural de forma consistente. Sustituye las valoraciones (\"muy bueno\", \"genial\") por datos o argumentos.",
+      "survey": {"label": "Registro poco académico (coloquialismos, primera persona inadecuada)", "mean_frequency": 3.69, "pct_frequent": 56, "time_votes": 7, "priority": 0.602},
+      "sources": ["encuesta P8a", "encuesta P9", "encuesta P11"]
+    },
+    {
+      "id": "L6", "category": "lenguaje", "title": "Redundancias y texto de relleno",
+      "method": "rule+llm", "severity": "importante", "must_fix": false,
+      "question": "Localiza ideas repetidas, frases que no aportan información (relleno, muletillas, generalidades del tipo \"hoy en día la tecnología es muy importante\") y párrafos que repiten lo dicho en otro apartado. Cita el fragmento.",
+      "guidance": "Pregúntate qué perdería el lector si eliminaras la frase. Si la respuesta es \"nada\", sobra. Concreta con datos, ejemplos o referencias.",
+      "survey": {"label": "Redundancias o texto de relleno", "mean_frequency": 4.12, "pct_frequent": 81, "time_votes": 6, "priority": 0.658},
+      "sources": ["encuesta P8a", "encuesta P9"]
+    },
+    {
+      "id": "L7", "category": "lenguaje", "title": "Terminología y estilo consistentes",
+      "method": "llm", "severity": "menor", "must_fix": false,
+      "question": "¿Se usa un único término por concepto? Señala sinónimos alternados para el mismo concepto técnico, extranjerismos innecesarios o sin cursiva, y cambios de persona gramatical o tiempo verbal.",
+      "guidance": "Elige un término por concepto y mantenlo en todo el documento; registra los términos en el glosario.",
+      "survey": null,
+      "sources": ["revision"]
+    },
+    {
+      "id": "E1", "category": "estructura", "title": "Secciones obligatorias según la normativa",
+      "method": "rule", "severity": "critico", "must_fix": true,
+      "question": null,
+      "guidance": "Comprueba la normativa de TFG de tu centro y titulación: añade los apartados requeridos y usa encabezados inequívocos y numerados.",
+      "survey": {"label": "Falta de secciones obligatorias según la normativa", "mean_frequency": 3.0, "pct_frequent": 25, "time_votes": 4, "priority": 0.425},
+      "sources": ["solicitud", "normativa", "encuesta P8b", "encuesta P11"]
+    },
+    {
+      "id": "E2", "category": "estructura", "title": "Equilibrio entre capítulos",
+      "method": "rule+llm", "severity": "importante", "must_fix": true,
+      "question": "¿El nivel de detalle es adecuado y equilibrado? Señala capítulos o apartados demasiado escuetos para su importancia, o excesivamente detallados (p. ej., explicaciones de tecnologías conocidas, listados de código o capturas que no aportan).",
+      "guidance": "El peso de cada capítulo debe reflejar su importancia: el desarrollo y la evaluación son el núcleo del trabajo. Lleva los detalles secundarios a anexos y desarrolla los apartados escasos.",
+      "survey": {"label": "Desequilibrio entre capítulos (unos demasiado extensos, otros escasos)", "mean_frequency": 3.94, "pct_frequent": 62, "time_votes": 5, "priority": 0.608},
+      "sources": ["solicitud", "encuesta P8b", "encuesta P10 (nivel de detalle)", "encuesta P11"]
+    },
+    {
+      "id": "E3", "category": "estructura", "title": "Introducción con motivación, objetivos y alcance claros",
+      "method": "llm", "severity": "critico", "must_fix": false,
+      "question": "¿La introducción presenta el problema, por qué merece resolverse (motivación), qué se pretende conseguir y qué queda fuera del alcance? ¿Los objetivos son concretos y verificables? Enumera los objetivos tal como aparecen.",
+      "guidance": "La introducción debe responder: ¿qué problema hay?, ¿por qué importa?, ¿qué haré exactamente?, ¿qué no haré? Formula los objetivos de forma verificable (con verbos como implementar, evaluar, comparar).",
+      "survey": {"label": "Introducción sin motivación, objetivos o alcance claros", "mean_frequency": 4.0, "pct_frequent": 75, "time_votes": 10, "priority": 0.712},
+      "sources": ["encuesta P8b", "encuesta P9", "revision"]
+    },
+    {
+      "id": "E4", "category": "estructura", "title": "Resumen y abstract coherentes con el contenido",
+      "method": "rule+llm", "severity": "importante", "must_fix": false,
+      "question": "¿El resumen (y el abstract) describe el problema, el método, los resultados principales y la conclusión reales del trabajo? Señala afirmaciones del resumen que no se desarrollan en el documento o resultados clave que faltan en él. ¿Hay palabras clave?",
+      "guidance": "Escribe el resumen al final: problema, qué has hecho, cómo, qué has obtenido y qué significa. Comprueba que español e inglés dicen lo mismo.",
+      "survey": {"label": "Resumen/abstract deficiente o inconsistente con el contenido", "mean_frequency": 3.06, "pct_frequent": 31, "time_votes": 4, "priority": 0.435},
+      "sources": ["encuesta P8c", "revision", "normativa"]
+    },
+    {
+      "id": "E5", "category": "estructura", "title": "Restos de borrador (TODO, secciones vacías, marcadores)",
+      "method": "rule+llm", "severity": "critico", "must_fix": true,
+      "question": "¿Hay secciones vacías o con solo un título, notas internas (TODO, pendiente, completar), texto de ejemplo de la plantilla o referencias cruzadas rotas (\"Figura ??\", \"Error! Reference source not found\")?",
+      "guidance": "Busca y elimina todos los marcadores antes de enviar el borrador; si una sección está pendiente, indícalo al tutor en el mensaje, no en la memoria.",
+      "survey": null,
+      "sources": ["revision", "encuesta P10 (lectura activa)"]
+    },
+    {
+      "id": "E6", "category": "estructura", "title": "Contenido en el capítulo adecuado",
+      "method": "llm", "severity": "menor", "must_fix": false,
+      "question": "¿Se distinguen estado del arte (trabajos de otros), marco tecnológico (herramientas utilizadas) y desarrollo (trabajo propio)? Señala contenido que esté en un capítulo equivocado.",
+      "guidance": "Estado del arte: qué han hecho otros y en qué se diferencia tu propuesta. Marco tecnológico: con qué herramientas trabajas y por qué. Desarrollo: qué has hecho tú.",
+      "survey": null,
+      "sources": ["revision", "solicitud"]
+    },
+    {
+      "id": "C1", "category": "coherencia", "title": "Objetivos alineados con resultados y conclusiones",
+      "method": "llm", "severity": "critico", "must_fix": true,
+      "question": "Enumera los objetivos declarados y, para cada uno, indica si hay desarrollo, resultado y conclusión asociados. Señala objetivos sin cerrar, y conclusiones o resultados que no responden a ningún objetivo.",
+      "guidance": "Construye una tabla objetivo → dónde se desarrolla → qué resultado lo demuestra → qué conclusión lo cierra. Si un objetivo no se ha cumplido, explícalo en las conclusiones.",
+      "survey": {"label": "Objetivos que no se corresponden con los resultados o las conclusiones", "mean_frequency": 3.31, "pct_frequent": 44, "time_votes": 6, "priority": 0.517},
+      "sources": ["encuesta P8b", "encuesta P9", "encuesta P11", "revision"]
+    },
+    {
+      "id": "C2", "category": "coherencia", "title": "Saltos lógicos y conexión entre secciones",
+      "method": "llm", "severity": "importante", "must_fix": false,
+      "question": "Señala saltos lógicos: conclusiones que no se siguen de lo anterior, párrafos sin transición, apartados que no se conectan con el capítulo o con el objetivo del trabajo. Cita el fragmento donde se produce el salto.",
+      "guidance": "Al inicio de cada capítulo indica qué aporta y cómo se relaciona con el anterior; entre párrafos, explicita la relación (causa, contraste, consecuencia).",
+      "survey": {"label": "Saltos lógicos o falta de conexión entre secciones", "mean_frequency": 3.75, "pct_frequent": 62, "time_votes": 9, "priority": 0.65},
+      "sources": ["solicitud", "encuesta P8b", "encuesta P9"]
+    },
+    {
+      "id": "C3", "category": "coherencia", "title": "Conclusiones con reflexión propia",
+      "method": "llm", "severity": "importante", "must_fix": false,
+      "question": "¿Las conclusiones aportan reflexión (qué se ha aprendido, qué significan los resultados, limitaciones, líneas futuras concretas) o solo repiten el resumen o enumeran lo hecho?",
+      "guidance": "Las conclusiones no son un resumen: valora el grado de cumplimiento de cada objetivo, explica qué significan los resultados, reconoce limitaciones y propone continuaciones concretas.",
+      "survey": {"label": "Conclusiones superficiales o que repiten el resumen", "mean_frequency": 3.94, "pct_frequent": 69, "time_votes": 4, "priority": 0.589},
+      "sources": ["encuesta P8b", "encuesta P10 (reflexión)"]
+    },
+    {
+      "id": "C4", "category": "coherencia", "title": "Afirmaciones proporcionadas a la evidencia",
+      "method": "llm", "severity": "importante", "must_fix": false,
+      "question": "¿Alguna conclusión o afirmación sobre el sistema va más allá de lo que demuestran los resultados (generalizaciones, superlativos, \"el sistema es eficiente/robusto\" sin medida)? Cita el fragmento.",
+      "guidance": "Cada afirmación sobre la calidad del trabajo debe apoyarse en un resultado concreto; si no lo hay, matiza la afirmación o preséntala como hipótesis.",
+      "survey": null,
+      "sources": ["revision"]
+    },
+    {
+      "id": "N1", "category": "contenido", "title": "Términos técnicos, siglas y conceptos definidos",
+      "method": "rule+llm", "severity": "importante", "must_fix": true,
+      "question": "Lista los términos técnicos, siglas y conceptos clave que se usan sin haber sido definidos o explicados en su primera aparición.",
+      "guidance": "Define cada sigla en su primer uso, p. ej. \"interfaz de programación de aplicaciones (API)\", y recógelas en un glosario. Explica los conceptos clave antes de usarlos.",
+      "survey": {"label": "Términos técnicos, siglas o conceptos clave sin definir", "mean_frequency": 3.62, "pct_frequent": 56, "time_votes": 5, "priority": 0.552},
+      "sources": ["solicitud", "encuesta P8c", "encuesta P11", "encuesta P14"]
+    },
+    {
+      "id": "N2", "category": "contenido", "title": "Decisiones técnicas justificadas",
+      "method": "llm", "severity": "critico", "must_fix": false,
+      "question": "¿Las decisiones técnicas (tecnologías, arquitectura, algoritmos, metodología) se justifican frente a alternativas razonables? ¿Se explica el proceso de construcción y no solo el producto o el código? Señala decisiones presentadas sin justificación.",
+      "guidance": "Para cada decisión importante, explica qué alternativas consideraste, con qué criterios elegiste y por qué. Describe el proceso, no solo el resultado final.",
+      "survey": {"label": "Falta de justificación de decisiones técnicas", "mean_frequency": 4.06, "pct_frequent": 62, "time_votes": 7, "priority": 0.667},
+      "sources": ["encuesta P8c", "encuesta P9", "encuesta P10 (proceso frente a producto)"]
+    },
+    {
+      "id": "N3", "category": "contenido", "title": "Resultados analizados e interpretados",
+      "method": "llm", "severity": "critico", "must_fix": false,
+      "question": "¿Los resultados se analizan e interpretan (qué significan, comparación con una referencia o con el estado del arte, criterios de evaluación explícitos) o solo se presentan (tablas, capturas, cifras) sin discusión?",
+      "guidance": "Tras cada tabla o figura de resultados, explica qué muestra, por qué ocurre y qué implica para tus objetivos. Define antes los criterios con los que evalúas.",
+      "survey": {"label": "Resultados presentados sin análisis ni interpretación", "mean_frequency": 3.81, "pct_frequent": 62, "time_votes": 7, "priority": 0.623},
+      "sources": ["encuesta P8c", "encuesta P9", "revision"]
+    },
+    {
+      "id": "N4", "category": "contenido", "title": "Metodología y requisitos trazables",
+      "method": "llm", "severity": "importante", "must_fix": false,
+      "question": "¿Se describe una metodología aplicada realmente en el trabajo? Si hay requisitos, ¿son verificables y se trazan hasta la implementación y las pruebas? ¿Se distingue la aportación propia del trabajo de terceros?",
+      "guidance": "Describe cómo has trabajado de verdad (iteraciones, planificación, validación) y relaciona cada requisito con dónde se implementa y cómo se prueba.",
+      "survey": null,
+      "sources": ["revision"]
+    },
+    {
+      "id": "N5", "category": "contenido", "title": "Limitaciones y trabajo futuro concretos",
+      "method": "llm", "severity": "menor", "must_fix": false,
+      "question": "¿Se reconocen limitaciones del trabajo y se proponen líneas futuras concretas y realistas (no genéricas)?",
+      "guidance": "Reconocer limitaciones demuestra espíritu crítico. Propón trabajo futuro concreto y justificado por esas limitaciones.",
+      "survey": null,
+      "sources": ["revision", "encuesta P10 (reflexión)"]
+    },
+    {
+      "id": "R1", "category": "referencias", "title": "Afirmaciones respaldadas por citas",
+      "method": "llm", "severity": "critico", "must_fix": false,
+      "question": "¿Qué afirmaciones, datos, cifras, definiciones o comparativas necesitarían una referencia y no la tienen? Cita cada fragmento.",
+      "guidance": "Todo dato, cifra, definición ajena o afirmación sobre el estado del arte debe llevar su cita. Si no encuentras fuente, matiza la afirmación o elimínala.",
+      "survey": {"label": "Afirmaciones sin cita o bibliografía insuficiente", "mean_frequency": 4.56, "pct_frequent": 94, "time_votes": 9, "priority": 0.792},
+      "sources": ["solicitud", "encuesta P8d", "encuesta P9"]
+    },
+    {
+      "id": "R2", "category": "referencias", "title": "Formato de citas consistente",
+      "method": "rule+llm", "severity": "importante", "must_fix": true,
+      "question": "¿Las citas en el texto y las entradas bibliográficas siguen un estilo único y completo (autor, título, año, editorial o URL con fecha de consulta)? Señala entradas incompletas o con formatos mezclados.",
+      "guidance": "Usa un único estilo (IEEE, APA…) según indique tu titulación; un gestor bibliográfico (BibTeX, Zotero) evita inconsistencias. Las fuentes web necesitan fecha de consulta.",
+      "survey": {"label": "Citas mal formateadas o inconsistentes", "mean_frequency": 3.94, "pct_frequent": 75, "time_votes": 3, "priority": 0.571},
+      "sources": ["solicitud", "encuesta P8d", "encuesta P11"]
+    },
+    {
+      "id": "R3", "category": "referencias", "title": "Correspondencia entre citas y bibliografía",
+      "method": "rule", "severity": "importante", "must_fix": true,
+      "question": null,
+      "guidance": "Cada cita del texto debe tener su entrada en la bibliografía y cada entrada debe citarse al menos una vez en el texto.",
+      "survey": {"label": "Referencias en la bibliografía que no se citan en el texto (o al revés)", "mean_frequency": 3.75, "pct_frequent": 69, "time_votes": 2, "priority": 0.519},
+      "sources": ["encuesta P8d", "encuesta P11"]
+    },
+    {
+      "id": "R4", "category": "referencias", "title": "Fiabilidad y variedad de las fuentes",
+      "method": "rule+llm", "severity": "menor", "must_fix": false,
+      "question": "¿Las fuentes son fiables, relevantes y actuales (artículos, libros, documentación oficial) o predominan blogs, foros, Wikipedia y páginas comerciales? ¿Hay equilibrio entre fuentes académicas y web?",
+      "guidance": "Prioriza artículos revisados por pares, libros y documentación oficial. Usa la biblioteca de la UPM y valora la autoridad de cada fuente.",
+      "survey": null,
+      "sources": ["encuesta P10 (adecuación de fuentes)", "encuesta P17"]
+    },
+    {
+      "id": "F1", "category": "figuras", "title": "Figuras y tablas numeradas, con pie y citadas en el texto",
+      "method": "rule+llm", "severity": "importante", "must_fix": true,
+      "question": "¿Las figuras y tablas tienen numeración correlativa y pie descriptivo, y se mencionan y comentan en el texto? Lista las que no se citan.",
+      "guidance": "Cada figura y tabla necesita número, pie autoexplicativo y una mención en el texto que explique qué debe observar el lector.",
+      "survey": {"label": "Figuras y tablas sin numerar, sin pie o sin mencionar en el texto", "mean_frequency": 3.62, "pct_frequent": 50, "time_votes": 4, "priority": 0.533},
+      "sources": ["encuesta P8d", "encuesta P11", "encuesta P14"]
+    },
+    {
+      "id": "F2", "category": "figuras", "title": "Fuente indicada en figuras y tablas ajenas",
+      "method": "llm", "severity": "importante", "must_fix": false,
+      "question": "¿Las figuras, tablas o fragmentos de código tomados de otros trabajos indican su fuente (y licencia si procede)? Señala los pies que parecen describir material ajeno sin cita.",
+      "guidance": "Si una figura o tabla procede de otro trabajo (aunque la hayas adaptado), indica \"Fuente: [ref]\" o \"Adaptado de [ref]\" en el pie.",
+      "survey": null,
+      "sources": ["encuesta P10 (citas en tablas e imágenes)", "revision"]
+    },
+    {
+      "id": "F3", "category": "figuras", "title": "Legibilidad y tamaño de figuras, capturas y código",
+      "method": "manual", "severity": "menor", "must_fix": false,
+      "question": null,
+      "guidance": "Comprueba manualmente que las figuras se leen impresas sin ampliar, que las capturas no son decorativas ni redundantes y que no muestran datos personales, credenciales o rutas locales. El análisis de texto no puede verificar el aspecto visual.",
+      "survey": null,
+      "sources": ["encuesta P10 (tamaño de figuras)", "revision"]
+    },
+    {
+      "id": "A1", "category": "autoria", "title": "Voz propia: pasajes genéricos sin aportación del estudiante",
+      "method": "llm", "severity": "importante", "must_fix": false,
+      "question": "Señala pasajes genéricos e impersonales que no aportan nada específico del trabajo (enumeraciones vacías, frases comodín, tono de folleto, ausencia de datos o decisiones concretas), que podrían corresponder a texto generado automáticamente sin elaboración propia. Es solo un indicio a revisar, nunca una acusación.",
+      "guidance": "Este indicador NO detecta IA con fiabilidad: señala pasajes genéricos que no reflejan tu trabajo. Reescríbelos con tus palabras incluyendo tus decisiones, datos y experiencia concretos. Si has usado IA generativa, decláralo según la normativa.",
+      "survey": {"label": "Texto que parece generado por IA sin trabajo propio del estudiante", "mean_frequency": 3.38, "pct_frequent": 50, "time_votes": 8, "priority": 0.567},
+      "sources": ["solicitud", "encuesta P8e", "encuesta P9", "encuesta P12", "encuesta P15"]
+    },
+    {
+      "id": "A2", "category": "autoria", "title": "Posible copia o parafraseo excesivo de fuentes",
+      "method": "llm", "severity": "importante", "must_fix": false,
+      "question": "¿Hay pasajes que parecen copiados o traducidos casi literalmente de una fuente (cambios bruscos de estilo, terminología distinta, sin cita)? Señálalos solo como sospecha a verificar.",
+      "guidance": "Las ideas ajenas se citan y se explican con tus palabras; las citas literales van entre comillas con su referencia. Es una sospecha a comprobar, no una acusación.",
+      "survey": {"label": "Copia o parafraseo excesivo de fuentes", "mean_frequency": 2.81, "pct_frequent": 19, "time_votes": 3, "priority": 0.373},
+      "sources": ["encuesta P8e", "revision"]
+    },
+    {
+      "id": "P1", "category": "formal", "title": "Páginas preliminares y requisitos formales",
+      "method": "llm", "severity": "menor", "must_fix": false,
+      "question": "¿Se identifican portada, índice, resumen bilingüe, palabras clave y, si la normativa lo exige, declaración de uso de IA generativa y licencia? Indica qué debe comprobarse manualmente (márgenes, tipografía, interlineado, extensión, numeración de páginas).",
+      "guidance": "Revisa la plantilla oficial de tu centro: portada, extensión, márgenes, tipografía y numeración no se pueden verificar completamente a partir del texto.",
+      "survey": null,
+      "sources": ["normativa", "revision"]
+    },
+    {
+      "id": "P2", "category": "formal", "title": "Protección de datos, ética e impacto",
+      "method": "llm", "severity": "importante", "must_fix": false,
+      "question": "Si el trabajo usa datos personales o usuarios reales, ¿se trata el consentimiento, la anonimización y la protección de datos? ¿Se analiza el impacto social, ambiental o ético del trabajo cuando procede?",
+      "guidance": "Si hay usuarios o datos reales, explica cómo has obtenido el consentimiento y anonimizado los datos. Revisa si tu normativa exige un apartado de impacto (ODS, ética).",
+      "survey": null,
+      "sources": ["revision", "normativa"]
+    },
+    {
+      "id": "P3", "category": "formal", "title": "Datos sensibles, credenciales y repositorio",
+      "method": "rule+llm", "severity": "critico", "must_fix": true,
+      "question": "¿Aparecen credenciales, contraseñas, claves de API, correos personales, rutas locales o datos sensibles en el texto o en los fragmentos de código? ¿El repositorio o software se enlaza con licencia?",
+      "guidance": "Elimina credenciales, claves y rutas locales del texto y de las capturas. Enlaza el repositorio e indica su licencia.",
+      "survey": null,
+      "sources": ["revision"]
+    }
+  ]
+}
